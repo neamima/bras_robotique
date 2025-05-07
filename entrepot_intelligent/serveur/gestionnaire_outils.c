@@ -8,6 +8,16 @@
 #include <pthread.h>
 #include "../include/commun.h"
 
+#define NB_OUTILS 5
+
+typedef struct {
+    int id;
+    int occupe;
+    pthread_mutex_t verrou;
+} Outil;
+
+Outil outils[NB_OUTILS];
+
 void *gerer_client(void *arg) {
     int socket_client = *(int *)arg;
     free(arg);
@@ -20,7 +30,54 @@ void *gerer_client(void *arg) {
             printf("Client déconnecté (socket %d).\n", socket_client);
             break;
         }
-        printf("Reçu du client (socket %d) : %s\n", socket_client, buffer);
+
+        buffer[lu] = '\0'; // très important
+        printf("📨 Message reçu du client : %s\n", buffer);
+
+        if (strncmp(buffer, "DEMANDE_DEUX_OUTILS", strlen("DEMANDE_DEUX_OUTILS")) == 0) {
+            int id1, id2;
+            sscanf(buffer, "DEMANDE_DEUX_OUTILS %d %d", &id1, &id2);
+            printf("🔧 Client demande les outils %d et %d\n", id1, id2);
+
+            if (id1 > id2) { int tmp = id1; id1 = id2; id2 = tmp; }
+
+            pthread_mutex_lock(&outils[id1].verrou);
+            if (outils[id1].occupe) {
+                pthread_mutex_unlock(&outils[id1].verrou);
+                send(socket_client, "OCCUPE\n", 7, 0);
+                continue;
+            }
+
+            pthread_mutex_lock(&outils[id2].verrou);
+            if (outils[id2].occupe) {
+                pthread_mutex_unlock(&outils[id2].verrou);
+                pthread_mutex_unlock(&outils[id1].verrou);
+                send(socket_client, "OCCUPE\n", 7, 0);
+                continue;
+            }
+
+            outils[id1].occupe = 1;
+            outils[id2].occupe = 1;
+            pthread_mutex_unlock(&outils[id2].verrou);
+            pthread_mutex_unlock(&outils[id1].verrou);
+
+            send(socket_client, "OK\n", 3, 0);
+        } else if (strncmp(buffer, "LIBERATION_OUTIL", strlen("LIBERATION_OUTIL")) == 0) {
+            // gérer plusieurs lignes
+            char *ligne = strtok(buffer, "\n");
+            while (ligne != NULL) {
+                int id;
+                if (sscanf(ligne, "LIBERATION_OUTIL %d", &id) == 1) {
+                    printf("🔓 Libération de l’outil %d\n", id);
+                    pthread_mutex_lock(&outils[id].verrou);
+                    outils[id].occupe = 0;
+                    pthread_mutex_unlock(&outils[id].verrou);
+                }
+                ligne = strtok(NULL, "\n");
+            }
+        } else {
+            printf("❓ Message non reconnu : %s\n", buffer);
+        }
     }
 
     close(socket_client);
@@ -48,11 +105,17 @@ int main() {
         exit(1);
     }
 
+    for (int i = 0; i < NB_OUTILS; i++) {
+        outils[i].id = i;
+        outils[i].occupe = 0;
+        pthread_mutex_init(&outils[i].verrou, NULL);
+    }
+
     listen(socket_ecoute, 10);
-    printf("Serveur en attente de connexions sur le port %d...\n", PORT);
+    printf("🟢 Serveur en attente de connexions sur le port %d...\n", PORT);
 
     while (1) {
-        int *socket_client = malloc(sizeof(int)); // alloué dynamiquement pour chaque thread
+        int *socket_client = malloc(sizeof(int));
         *socket_client = accept(socket_ecoute, (struct sockaddr *)&client_addr, &client_len);
         if (*socket_client < 0) {
             perror("Erreur accept");
@@ -60,7 +123,7 @@ int main() {
             continue;
         }
 
-        printf("Connexion acceptée depuis %s:%d (socket %d)\n",
+        printf("✅ Connexion acceptée depuis %s:%d (socket %d)\n",
                inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port), *socket_client);
 
         pthread_t thread_id;
