@@ -23,19 +23,24 @@ void *thread_idle(void *arg) {
 }
 
 void *thread_comm(void *arg) {
-    char message[TAILLE_BUFFER];
-    snprintf(message, TAILLE_BUFFER, "DEMANDE_DEUX_OUTILS 1 2\n");
-    send(sock, message, strlen(message), 0);
-    printf("📤 [Comm] Message envoyé : %s", message);
+    
 
     char reponse[TAILLE_BUFFER];
+    char message[TAILLE_BUFFER];
+
+    int *ids = (int *)arg;
+    
+    snprintf(message, TAILLE_BUFFER, "DEMANDE_DEUX_OUTILS %d %d", ids[0], ids[1]);
     while (1) {
+        send(sock, message, strlen(message), 0);
+        printf("📤 [Comm] Message envoyé : %s\n", message);
+
+
         int lu = recv(sock, reponse, TAILLE_BUFFER - 1, 0);
         if (lu <= 0) {
             printf("❌ [Comm] Connexion perdue ou serveur fermé.\n");
             break;
         }
-        reponse[lu] = '\0';
         printf("📥 [Comm] Réponse du serveur : %s\n", reponse);
 
         if (strncmp(reponse, "OK", 2) == 0) {
@@ -44,9 +49,10 @@ void *thread_comm(void *arg) {
             pthread_cond_signal(&cond_outils_dispos);
             pthread_mutex_unlock(&verrou);
             break;
-        } else if (strncmp(reponse, "EN_ATTENTE", 10) == 0) {
+        } else if (strncmp(reponse, "OCCUPE", 6) == 0) {
             printf("⏳ [Comm] En attente des outils...\n");
             sleep(1); // attente passive, le serveur renverra OK plus tard
+
         } else {
             printf("⚠️ [Comm] Réponse inattendue : %s\n", reponse);
             break;
@@ -57,7 +63,8 @@ void *thread_comm(void *arg) {
 }
 
 void *thread_assemble(void *arg) {
-    printf("🛑 [Assemblage] En attente des outils...\n");
+    int *ids = (int *)arg;
+    printf("🔧 [Assemblage] Attente des outils %d et %d...\n", ids[0], ids[1]);
 
     pthread_mutex_lock(&verrou);
     while (!outils_ok)
@@ -69,7 +76,7 @@ void *thread_assemble(void *arg) {
     printf("✅ [Assemblage] Tâche terminée.\n");
 
     char message[TAILLE_BUFFER];
-    snprintf(message, TAILLE_BUFFER, "LIBERATION_OUTIL 1\nLIBERATION_OUTIL 2\n");
+    snprintf(message, TAILLE_BUFFER, "LIBERATION_OUTIL %d\nLIBERATION_OUTIL %d\n", ids[0], ids[1]);
     send(sock, message, strlen(message), 0);
     printf("📤 [Assemblage] Outils libérés.\n");
 
@@ -98,11 +105,17 @@ int main() {
 
     printf("🤖 [Client] Connecté au serveur.\n");
 
+
+    int id1 = rand() % NB_OUTILS,id2 = rand() % NB_OUTILS;
+    while (id1 == id2) {
+        id2 = rand() % NB_OUTILS; // s'assurer que id1 et id2 sont différents
+    }
+    int arg[2]={id1,id2};
     pthread_t t_idle, t_comm, t_assemble;
     pthread_create(&t_idle, NULL, thread_idle, NULL);
     pthread_join(t_idle, NULL);
-    pthread_create(&t_comm, NULL, thread_comm, NULL);
-    pthread_create(&t_assemble, NULL, thread_assemble, NULL);
+    pthread_create(&t_comm, NULL, thread_comm, (void*) arg);
+    pthread_create(&t_assemble, NULL, thread_assemble, (void*) arg);
 
     
     pthread_join(t_comm, NULL);

@@ -8,15 +8,7 @@
 #include <pthread.h>
 #include "../include/commun.h"
 
-#define NB_OUTILS 5
 
-typedef struct {
-    int id;
-    int occupe;
-    pthread_mutex_t verrou;
-} Outil;
-
-Outil outils[NB_OUTILS];
 
 void *gerer_client(void *arg) {
     int socket_client = *(int *)arg;
@@ -44,7 +36,7 @@ void *gerer_client(void *arg) {
             pthread_mutex_lock(&outils[id1].verrou);
             if (outils[id1].occupe) {
                 pthread_mutex_unlock(&outils[id1].verrou);
-                send(socket_client, "OCCUPE\n", 7, 0);
+                send(socket_client, "OCCUPE", 6, 0);
                 continue;
             }
 
@@ -52,7 +44,7 @@ void *gerer_client(void *arg) {
             if (outils[id2].occupe) {
                 pthread_mutex_unlock(&outils[id2].verrou);
                 pthread_mutex_unlock(&outils[id1].verrou);
-                send(socket_client, "OCCUPE\n", 7, 0);
+                send(socket_client, "OCCUPE", 6, 0);
                 continue;
             }
 
