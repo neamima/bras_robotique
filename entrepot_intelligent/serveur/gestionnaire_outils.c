@@ -11,15 +11,16 @@
 
 
 void *gerer_client(void *arg) {
-    int socket_client = *(int *)arg;
-    free(arg);
+    client_info *client = (client_info *)arg;
+    int socket_client = *client->socket_client;
     char buffer[TAILLE_BUFFER];
 
     while (1) {
         memset(buffer, 0, TAILLE_BUFFER);
         int lu = recv(socket_client, buffer, TAILLE_BUFFER - 1, 0);
         if (lu <= 0) {
-            printf("Client déconnecté (socket %d).\n", socket_client);
+            printf("Client déconnecté %s:%d (socket %d).\n" 
+                    ,inet_ntoa(client->addr.sin_addr), ntohs(client->addr.sin_port),socket_client);
             break;
         }
 
@@ -80,6 +81,7 @@ int main() {
     int socket_ecoute;
     struct sockaddr_in serveur_addr, client_addr;
     socklen_t client_len = sizeof(client_addr);
+    logs = fopen("logs.txt", "a");
 
     socket_ecoute = socket(AF_INET, SOCK_STREAM, 0);
     if (socket_ecoute < 0) {
@@ -115,11 +117,15 @@ int main() {
             continue;
         }
 
+        client_info *client=malloc(sizeof(client_info));
+        client->socket_client = socket_client;
+        client->addr = client_addr;
+
         printf("✅ Connexion acceptée depuis %s:%d (socket %d)\n",
-               inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port), *socket_client);
+               inet_ntoa(client->addr.sin_addr), ntohs(client->addr.sin_port), *client->socket_client);
 
         pthread_t thread_id;
-        if (pthread_create(&thread_id, NULL, gerer_client, socket_client) != 0) {
+        if (pthread_create(&thread_id, NULL, gerer_client, client) != 0) {
             perror("Erreur pthread_create");
             close(*socket_client);
             free(socket_client);
@@ -129,5 +135,6 @@ int main() {
     }
 
     close(socket_ecoute);
+    fclose(logs);
     return 0;
 }

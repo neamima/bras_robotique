@@ -83,7 +83,7 @@ void *thread_assemble(void *arg) {
     return NULL;
 }
 
-int main() {
+int main(int argc, char *argv[]) {
     srand(time(NULL));
 
     struct sockaddr_in serveur_addr;
@@ -104,22 +104,25 @@ int main() {
     }
 
     printf("🤖 [Client] Connecté au serveur.\n");
+    int id1,id2,i=0,t=atoi(argv[1]);
+    while(i<t){
+        id1 = rand() % NB_OUTILS;
+        id2 = rand() % NB_OUTILS;
+        while (id1 == id2) {
+            id2 = rand() % NB_OUTILS; // s'assurer que id1 et id2 sont différents
+        }
+        int arg[2]={id1,id2};
+        pthread_t t_idle, t_comm, t_assemble;
+        pthread_create(&t_idle, NULL, thread_idle, NULL);
+        pthread_join(t_idle, NULL);
+        pthread_create(&t_comm, NULL, thread_comm, (void*) arg);
+        pthread_create(&t_assemble, NULL, thread_assemble, (void*) arg);
 
-
-    int id1 = rand() % NB_OUTILS,id2 = rand() % NB_OUTILS;
-    while (id1 == id2) {
-        id2 = rand() % NB_OUTILS; // s'assurer que id1 et id2 sont différents
+        
+        pthread_join(t_comm, NULL);
+        pthread_join(t_assemble, NULL);
+        i++;
     }
-    int arg[2]={id1,id2};
-    pthread_t t_idle, t_comm, t_assemble;
-    pthread_create(&t_idle, NULL, thread_idle, NULL);
-    pthread_join(t_idle, NULL);
-    pthread_create(&t_comm, NULL, thread_comm, (void*) arg);
-    pthread_create(&t_assemble, NULL, thread_assemble, (void*) arg);
-
-    
-    pthread_join(t_comm, NULL);
-    pthread_join(t_assemble, NULL);
 
     close(sock);
     pthread_mutex_destroy(&verrou);

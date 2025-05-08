@@ -14,6 +14,13 @@ typedef struct {
     pthread_mutex_t verrou;
 } Outil;
 
+typedef struct {
+    int *socket_client;
+    struct sockaddr_in addr;
+} client_info;
+
 Outil outils[NB_OUTILS];
+
+FILE *logs;
 
 #endif
