@@ -1,5 +1,3 @@
-// client.c
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,6 +39,7 @@ void *thread_comm(void *arg) {
             printf("❌ [Comm] Connexion perdue ou serveur fermé.\n");
             break;
         }
+        reponse[lu] = '\0';
         printf("📥 [Comm] Réponse du serveur : %s\n", reponse);
 
         if (strncmp(reponse, "OK", 2) == 0) {
@@ -51,7 +50,7 @@ void *thread_comm(void *arg) {
             break;
         } else if (strncmp(reponse, "OCCUPE", 6) == 0) {
             printf("⏳ [Comm] En attente des outils...\n");
-            sleep(1); // attente passive, le serveur renverra OK plus tard
+            sleep(3);
 
         } else {
             printf("⚠️ [Comm] Réponse inattendue : %s\n", reponse);
@@ -76,7 +75,7 @@ void *thread_assemble(void *arg) {
     printf("✅ [Assemblage] Tâche terminée.\n");
 
     char message[TAILLE_BUFFER];
-    snprintf(message, TAILLE_BUFFER, "LIBERATION_OUTIL %d\nLIBERATION_OUTIL %d\n", ids[0], ids[1]);
+    snprintf(message, TAILLE_BUFFER, "LIBERATION_OUTIL %d %d", ids[0], ids[1]);
     send(sock, message, strlen(message), 0);
     printf("📤 [Assemblage] Outils libérés.\n");
 
@@ -84,6 +83,12 @@ void *thread_assemble(void *arg) {
 }
 
 int main(int argc, char *argv[]) {
+
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <nombre_de_taches>\n", argv[0]);
+        exit(1);
+    }
+
     srand(time(NULL));
 
     struct sockaddr_in serveur_addr;
@@ -109,7 +114,7 @@ int main(int argc, char *argv[]) {
         id1 = rand() % NB_OUTILS;
         id2 = rand() % NB_OUTILS;
         while (id1 == id2) {
-            id2 = rand() % NB_OUTILS; // s'assurer que id1 et id2 sont différents
+            id2 = rand() % NB_OUTILS;
         }
         int arg[2]={id1,id2};
         pthread_t t_idle, t_comm, t_assemble;
